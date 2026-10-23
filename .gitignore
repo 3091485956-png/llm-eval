@@ -1,0 +1,15 @@
+# 密钥与个人配置(绝不入库)
+models.yaml
+
+# 本地缓存与运行产物
+benchmarks_cache/
+results/
+__pycache__/
+*.log
+
+# nltk 数据(首次运行自动下载; 国内可用 gh api 方式, 见 README)
+ifbench/.nltk_data/
+
+# 导出目录(如曾生成在项目内)
+测试作答/
+评分包/

@@ -1,0 +1,50 @@
+# 真实厂商接入示例（OpenAI 兼容接口, 2026-10 常用写法, 以各厂商最新文档为准）
+# 使用: 复制对应段落到 models.yaml 的 models 列表并填 key。
+# 密钥建议用环境变量:  setx ZHIPU_API_KEY sk-xxx  (Windows, 重启终端生效)
+
+models:
+  - id: M01
+    name: GLM-5
+    vendor: 智谱AI
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key: env:ZHIPU_API_KEY
+    model: glm-5
+    enabled: false
+
+  - id: M02
+    name: DeepSeek-V3.2
+    vendor: 深度求索
+    base_url: https://api.deepseek.com/v1
+    api_key: env:DEEPSEEK_API_KEY
+    model: deepseek-chat
+    enabled: false
+
+  - id: M03
+    name: Qwen3-Max
+    vendor: 阿里云百炼
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key: env:DASHSCOPE_API_KEY
+    model: qwen3-max
+    enabled: false
+
+  - id: M04
+    name: Kimi K2
+    vendor: 月之暗面
+    base_url: https://api.moonshot.cn/v1
+    api_key: env:MOONSHOT_API_KEY
+    model: kimi-k2
+    enabled: false
+
+  - id: M05
+    name: GPT-5
+    vendor: OpenAI
+    base_url: https://api.openai.com/v1
+    api_key: env:OPENAI_API_KEY
+    model: gpt-5
+    enabled: false
+
+judge:  # 评审模型示例: 选一家你不测的厂商, 或最强且中立的模型
+  base_url: https://api.deepseek.com/v1
+  api_key: env:DEEPSEEK_API_KEY
+  model: deepseek-chat
+  temperature: 0.0
