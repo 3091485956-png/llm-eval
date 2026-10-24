@@ -468,12 +468,16 @@ def make_judge_fn(cfg, mock):
     full = load_yaml(BASE / "models.yaml")
 
     def judge(q, resp):
-        text, usage, _ = chat_with_retry(
-            cfg, [{"role": "system", "content": JUDGE_SYS},
-                  {"role": "user", "content": build_judge_prompt(q, resp)}],
-            cfg.get("temperature", 0.0), 2048,
-            (full.get("defaults") or {}).get("retries", 2))
-        return text, usage or {}
+        try:
+            text, usage, _ = chat_with_retry(
+                cfg, [{"role": "system", "content": JUDGE_SYS},
+                      {"role": "user", "content": build_judge_prompt(q, resp)}],
+                cfg.get("temperature", 0.0), 2048,
+                (full.get("defaults") or {}).get("retries", 2))
+            return text, usage or {}
+        except Exception as e:
+            # 评审调用失败不崩全局: 记0分并留痕
+            return ("评审调用失败: " + str(e)[:150], {})
     return judge
 
 
@@ -509,11 +513,14 @@ def main():
 
     rows, summary, cost_sum = [], {}, {}
     for rec in recs:
-        q = qmap.get(rec["question_id"])
-        if not q:
-            print(f"! 跳过未知题目 {rec['question_id']}")
-            continue
-        score, method, detail, ju = score_one(q, rec, judge_fn)
+        try:
+            q = qmap.get(rec["question_id"])
+            if not q:
+                print(f"! 跳过未知题目 {rec['question_id']}")
+                continue
+            score, method, detail, ju = score_one(q, rec, judge_fn)
+        except Exception as e:
+            score, method, detail, ju = 0, "规则自动判分", f"评分异常: {str(e)[:150]}", None
         usage = rec.get("usage") or {}
         in_t, out_t = usage.get("prompt_tokens"), usage.get("completion_tokens")
         ju = ju or {}

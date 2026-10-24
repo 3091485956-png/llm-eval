@@ -169,7 +169,7 @@ def export(out_file="results/results.jsonl", out_dir=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="results/results.jsonl")
-    ap.add_argument("--dir", default="评分包")
+    ap.add_argument("--dir", default=None, help="默认导出到桌面\\评分包\\")
     args = ap.parse_args()
     r = export(args.out, args.dir)
     if r.get("ok"):

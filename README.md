@@ -161,6 +161,7 @@ llm-eval/
 ├── questions_archive/     # 旧版自编题库（120 题）
 ├── ifbench/               # AllenAI IFBench 官方校验器（Apache-2.0，随包分发）
 ├── templates/             # 手动登记 Excel 模板（网页端体验测试用）
+├── 评分包/                # 正式跑分交付物：240题官方答案 + 7模型作答 + 人工评分表 + 测试报告
 ├── docs/                  # 截图
 └── models.example.yaml    # 配置示例（真实 models.yaml 不入库）
 ```
@@ -178,7 +179,7 @@ llm-eval/
 | CLUE / BEIR(scifact) | 各自官方协议（研究用途） |
 | jsonschemabench | 未标注许可证，仅限内部评测使用 |
 
-**请勿将题库用于商业用途或再分发**；正式评测建议从各官方渠道获取完整数据集（`bench2jsonl.py` 支持重新生成）。
+**请勿将题库用于商业用途或再分发**；`评分包/` 内含基准题目原文与官方答案的抽样引用及各模型作答，同样仅限研究用途；正式评测建议从各官方渠道获取完整数据集（`bench2jsonl.py` 支持重新生成）。
 
 ## 🔒 安全说明
 

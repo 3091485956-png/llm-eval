@@ -527,6 +527,127 @@ def load_all():
     return cfg, questions, scored
 
 
+def sheet_classify(wb):
+    """模型分类子表: 口径/公式/理由 + 梯队总表 + z画像明细 + 题目区分度"""
+    import classify as cf_mod
+    cf = cf_mod.classify()
+    ws = wb.create_sheet("模型分类")
+    last = 15  # B..O
+    setup_sheet(ws, "模型分类报告（口径·公式·理由随表）", last)
+    caption(ws, 4, "数据源: results/scored.jsonl · 生成时间 " + cf["generated"]
+            + " · 应作答题数 " + str(cf["expected"]) + " · 本表为分析快照, 数值与「能力评分汇总」同源")
+
+    r = 6
+    section_title(ws, r, "一、计算口径 · 公式 · 理由", last)
+    rules = [
+        ("1 客观综合分",
+         "公式 = 11个客观维度得分率的算术平均×100（不含创造力/文档解析）。",
+         "理由: 客观题为程序判分、可复核; 创造力是LLM评审主观分(评审模型同时参赛有自偏好风险, "
+         "且含14条评审失败记0), 故只列参考不进主公式。"),
+        ("2 资格门",
+         "完成率 = 有效作答/应作答; 错误率 = 错误记录/应作答; 完成率≥90% 且 错误率≤10% → ✓, 否则 ⚠(保留名次不除名)。",
+         "理由: 答得少的模型的平均分不能与答全者直接比较, 缺考信息必须显性化而非惩罚性折算。"),
+        ("3 梯队(固定带)",
+         "T1 ≥75 / T2 65~75 / T3 <65（按客观综合分）。本场实际: T1四人、T2三人、T3空档。",
+         "理由: 门槛先于数据立定, 不随本场分数挪动, 换模型/重跑可比; 三类对应决策语言——首选/够用/慎用。"),
+        ("4 能力画像(z分数)",
+         "z = (该模型该维度得分率 − 群体均值)/群体标准差; ◆相对优势 z≥+0.5; ▼相对短板 z≤−0.5; "
+         "✖绝对短板 得分率<50%(可与相对标签并存)。",
+         "理由: 梯队回答\"谁强\", 画像回答\"选谁干什么活\"; 相对+绝对双轨, 避免\"全场最差维度的第一名\"被误标为优势。"),
+        ("5 性价比与象限",
+         "性价比 = 客观综合分 / 施测费用(元, 不含评审费用); 象限以中位数切(本场 能力中位"
+         + str(cf["cap_med"]) + " / 费用中位" + str(cf["cost_med"]) + "元)。",
+         "理由: 能力与价格正交, 混入单一公式会得到\"便宜平庸=贵而强\"的失真; 分母用费用, 因为你付的是钱。"),
+        ("6 题目区分度",
+         "维度间标准差<5pp → 区分度不足; 均值≥90% 天花板 / <50% 地板。",
+         "理由: 这层评题不评模型, 为下轮换题提供依据(本场: 结构化输出需换难题, 长文本保留)。"),
+    ]
+    for i, (a, b, c) in enumerate(rules):
+        r += 1
+        for col, v in ((2, a), (3, b), (9, c)):
+            cell = ws.cell(row=r, column=col, value=clean(v))
+        ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=8)
+        ws.merge_cells(start_row=r, start_column=9, end_row=r, end_column=last)
+        for col in range(2, last + 1):
+            cc = ws.cell(row=r, column=col)
+            cc.fill = fill_row(i)
+            cc.font = f_sub() if col == 2 else f_body()
+            cc.alignment = a_txt()
+        ws.row_dimensions[r].height = 40
+
+    # ---- 二、总表 ----
+    r += 2
+    section_title(ws, r, "二、模型分类总表（按客观综合分降序）", last)
+    r += 1
+    heads = ["模型ID", "模型名称", "客观综合分", "完成率", "错误率", "资格门", "梯队",
+             "创造力(参考)", "施测费用(元)", "性价比(分/元)", "象限", "能力画像摘要"]
+    put_headers(ws, heads, row=r)
+    for i, row in enumerate(cf["rows"]):
+        r += 1
+        vals = [row["id"], row["name"], row["s_obj"], row["done"], row["err"],
+                row["gate"], row["tier"], row["creativity"], row["cost"], row["cp"],
+                row["quad"], clean("；".join(row["tags"]) or "—")]
+        for j, v in enumerate(vals, 2):
+            ws.cell(row=r, column=j, value=v)
+        style_row(ws, r, 2, 2 + len(heads) - 1, i, height=30)
+        for col, fmt in ((4, "0.0"), (5, "0.0%"), (6, "0.0%"), (10, "0.0000"), (11, "0.0")):
+            ws.cell(row=r, column=col).number_format = fmt
+            ws.cell(row=r, column=col).alignment = a_num()
+        tcell = ws.cell(row=r, column=8)
+        tcell.font = Font(name=FONT_NAME, size=11, color=POS if row["tier"] == "T1"
+                          else NEG if row["tier"] == "T3" else N900)
+        if row["gate"] == "⚠":
+            ws.cell(row=r, column=7).font = Font(name=FONT_NAME, size=11, color=WARN)
+    caption(ws, r + 1, "注: 创造力列为LLM评审参考分(不参与梯队); 费用为按所配单价的估算值; "
+                       "画像摘要完整标注见下表。")
+
+    # ---- 三、z画像明细 ----
+    dims_list = cf["obj_dims"] + (["创造力"] if cf["rows"] and cf["rows"][0].get("creativity") is not None else [])
+    r += 3
+    section_title(ws, r, "三、能力画像明细（数值% + z分数 + 标签; 创造力列仅供参考不打标签）", last)
+    r += 1
+    put_headers(ws, ["模型", "名称"] + [d if d != "创造力" else "创造力(参考)" for d in dims_list], row=r)
+    for i, zm in enumerate(cf["zmatrix"]):
+        r += 1
+        ws.cell(row=r, column=2, value=zm["id"])
+        ws.cell(row=r, column=3, value=clean(zm["name"]))
+        style_row(ws, r, 2, 3 + len(dims_list), i)
+        for j, cell in enumerate(zm["cells"], 4):
+            if cell["val"] is None:
+                continue
+            txt = f"{cell['val']}% (z{cell['z']:+.1f})" + (" " + cell["label"] if cell["label"] else "")
+            c = ws.cell(row=r, column=j, value=txt)
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            if "◆" in cell["label"]:
+                c.font = Font(name=FONT_NAME, size=10, color=POS)
+            elif "✖" in cell["label"] or "▼" in cell["label"]:
+                c.font = Font(name=FONT_NAME, size=10, color=NEG)
+            else:
+                c.font = Font(name=FONT_NAME, size=10, color=N600 if cell["dim"] == "创造力" else N900)
+
+    # ---- 四、题目区分度 ----
+    r += 2
+    section_title(ws, r, "四、题目区分度（评题不评模型, 为下轮换题服务）", last)
+    r += 1
+    put_headers(ws, ["维度", "群体均值%", "标准差pp", "难度判定", "区分度判定", "下轮建议"], row=r)
+    for i, d in enumerate(cf["disc"]):
+        r += 1
+        vals = [d["dim"] + ("(参考)" if d["subjective"] else ""), d["mean"], d["std"],
+                d["hard"], d["disc"], clean(d["advice"])]
+        for j, v in enumerate(vals, 2):
+            ws.cell(row=r, column=j, value=v)
+        style_row(ws, r, 2, 7, i)
+        for col in (3, 4):
+            ws.cell(row=r, column=col).alignment = a_num()
+        if d["disc"] == "区分度不足":
+            ws.cell(row=r, column=6).font = Font(name=FONT_NAME, size=11, color=WARN)
+
+    set_widths(ws, {"B": 10, "C": 17, "D": 13, "E": 10, "F": 10, "G": 8, "H": 7,
+                    "I": 11, "J": 12, "K": 12, "L": 12, "M": 40})
+    ws.freeze_panes = "D5"
+    return ws
+
+
 # ---------------------------------------------------------------- main
 def main():
     cfg, questions, scored = load_all()
@@ -541,6 +662,7 @@ def main():
     sheet_questions(wb, questions)
     r_last = sheet_records(wb, questions, scored)
     sheet_summary(wb, n_models, r_last, derive_dims(questions))
+    sheet_classify(wb)
     sheet_rubric(wb)
 
     for ws in wb.worksheets:
